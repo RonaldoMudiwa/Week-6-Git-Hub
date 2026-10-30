@@ -2,6 +2,8 @@
 [run]
 source = expense_api
 branch = True
+# Only starts the web server, so there's nothing to test in it.
+omit = expense_api/__main__.py
 
 [report]
 show_missing = True

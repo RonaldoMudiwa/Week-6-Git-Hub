@@ -10,8 +10,9 @@ terminal. This week the same idea becomes a proper web API.
 
 ## Status
 
-Day 1 of 7. The expense model, exact money handling, the repository and
-the service layer that the API will sit on top of.
+Day 2 of 7. The expense model, exact money handling, the repository, the
+service layer and a FastAPI app with create, read, update and delete
+endpoints.
 
 ## Getting started
 
@@ -21,16 +22,81 @@ python -m venv .venv
 pip install -r requirements.txt
 
 pytest                           # run the tests
+python -m expense_api            # start the API on http://127.0.0.1:8000
 ```
 
+While it's running, open http://127.0.0.1:8000/docs. FastAPI builds that
+page from the code, and every endpoint can be tried from there with a
+"Try it out" button.
+
 Needs Python 3.10 or newer.
+
+## The endpoints
+
+| Method | URL | Does | Answers |
+| --- | --- | --- | --- |
+| `POST` | `/expenses` | Add an expense | `201` and the new expense |
+| `GET` | `/expenses` | List every expense, newest first | `200` |
+| `GET` | `/expenses/{id}` | Get one | `200`, or `404` |
+| `PUT` | `/expenses/{id}` | Replace all of it | `200`, or `404` |
+| `PATCH` | `/expenses/{id}` | Change some fields | `200`, or `404` |
+| `DELETE` | `/expenses/{id}` | Remove it | `204`, or `404` |
+| `GET` | `/health` | Is the API up? | `200` |
+
+```bash
+curl -X POST http://127.0.0.1:8000/expenses \
+     -H "Content-Type: application/json" \
+     -d '{"title": "Lunch", "amount": "8.50", "category": "food"}'
+```
+
+```json
+{
+  "id": 1,
+  "title": "Lunch",
+  "amount": "8.50",
+  "category": "food",
+  "spent_on": "2026-10-30",
+  "note": "",
+  "created_at": "2026-10-30T12:00:00",
+  "updated_at": "2026-10-30T12:00:00"
+}
+```
+
+- **The right status codes.** `201 Created` with a `Location` header for a
+  new expense, `204 No Content` after a delete, `404` for an id that doesn't
+  exist and `422` for bad input. A program using the API can tell what
+  happened just from the number.
+- **Input is checked before our code runs.** The Pydantic models in
+  `schemas.py` describe the JSON the API accepts. A missing title, an
+  amount of `"abc"` or `1.005`, or an unknown category is sent back with a
+  `422` that says exactly which field is wrong.
+- **Typos are refused.** Sending `"ammount"` gets an error instead of being
+  quietly ignored.
+- **`PUT` vs `PATCH`.** `PUT` replaces the whole expense, like rewriting a
+  receipt. `PATCH` changes only the fields that are sent, like correcting
+  one number with a pen.
+- **Amounts come back as text**, like `"8.50"`. JSON numbers are floats in
+  many languages, and that would bring back the rounding problem.
 
 ## How it's built
 
 ```
-the API (from Day 2)  ->  ExpenseService  ->  ExpenseRepository  ->  storage
+routes.py  ->  ExpenseService  ->  ExpenseRepository  ->  storage
 ```
 
+- **`routes.py`** has one short function per endpoint. It reads the
+  request, asks the service to do the work and returns the answer. No rules
+  live here.
+- **`schemas.py`** holds the Pydantic models: the shape of the JSON going
+  in and out. They're kept apart from `Expense`, so the API's JSON and the
+  app's own model can each change without breaking the other.
+- **`app.py`** builds the app with `create_app()`. It turns our own errors
+  into proper `404` and `422` answers, so a missing expense never shows up
+  as a crash. The tests call `create_app()` with their own service, so each
+  test starts with an empty app and a clock it controls.
+- **Dependency injection.** Each endpoint asks for the service with
+  `Depends(get_service)` instead of creating one itself, like a worker
+  being handed the tools for the job instead of bringing their own.
 - **`Expense`** is one thing that was paid for: a title, an amount, a
   category, the date it was spent and an optional note. It's frozen, so it
   can't be changed by accident, and it checks its own values when it's made.
@@ -76,9 +142,12 @@ amount is rounded to 2 decimal places when it's made.
 ## Tests
 
 ```bash
-pytest          # 57 tests
+pytest          # 91 tests
 pytest --cov    # with a coverage report, fails below 95%
 ```
+
+The API tests use FastAPI's `TestClient`. It sends real HTTP requests to
+the app, but in memory, so no server has to be started.
 
 ## Week plan
 

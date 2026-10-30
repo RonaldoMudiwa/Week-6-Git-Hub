@@ -38,6 +38,9 @@ class ExpenseService:
                           created_at=now, updated_at=now)
         return self._repository.add(expense)
 
+    def today(self) -> date:
+        return self._clock().date()
+
     def get(self, expense_id: int) -> Expense:
         return self._repository.get(expense_id)
 
