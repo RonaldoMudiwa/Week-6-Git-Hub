@@ -1,4 +1,5 @@
-"""Tests for the in memory repository."""
+"""Tests every repository must pass. conftest.py runs each one against
+both the in memory and the SQLite repository."""
 
 from __future__ import annotations
 

@@ -21,3 +21,7 @@ class ExpenseNotFoundError(ExpenseError):
     def __init__(self, expense_id: int) -> None:
         self.expense_id = expense_id
         super().__init__(f"There's no expense with id {expense_id}.")
+
+
+class StorageError(ExpenseError):
+    """The database couldn't be opened, read or written."""

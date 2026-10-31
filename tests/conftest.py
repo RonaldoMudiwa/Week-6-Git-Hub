@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from expense_api import ExpenseService, InMemoryRepository
+from expense_api import ExpenseService, InMemoryRepository, SqliteRepository
 
 
 class FakeClock:
@@ -27,9 +27,15 @@ def clock() -> FakeClock:
     return FakeClock()
 
 
-@pytest.fixture
-def repository() -> InMemoryRepository:
-    return InMemoryRepository()
+@pytest.fixture(params=["memory", "sqlite"])
+def repository(request, tmp_path):
+    """Every test that uses a repository runs twice, once for each kind.
+    If both pass the same tests, they really can be swapped."""
+    if request.param == "memory":
+        yield InMemoryRepository()
+    else:
+        with SqliteRepository(tmp_path / "expenses.db") as repository:
+            yield repository
 
 
 @pytest.fixture

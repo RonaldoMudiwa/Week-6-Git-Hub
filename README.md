@@ -10,9 +10,9 @@ terminal. This week the same idea becomes a proper web API.
 
 ## Status
 
-Day 2 of 7. The expense model, exact money handling, the repository, the
-service layer and a FastAPI app with create, read, update and delete
-endpoints.
+Day 3 of 7. The expense model, exact money handling, the service layer, a
+FastAPI app with create, read, update and delete endpoints, and expenses
+saved in a SQLite database so they're still there after a restart.
 
 ## Getting started
 
@@ -23,6 +23,13 @@ pip install -r requirements.txt
 
 pytest                           # run the tests
 python -m expense_api            # start the API on http://127.0.0.1:8000
+```
+
+Expenses are saved in `data/expenses.db`. To use another file, or keep
+everything in memory, set `EXPENSE_DB` before starting:
+
+```bash
+set EXPENSE_DB=memory            # macOS or Linux: export EXPENSE_DB=memory
 ```
 
 While it's running, open http://127.0.0.1:8000/docs. FastAPI builds that
@@ -102,8 +109,8 @@ routes.py  ->  ExpenseService  ->  ExpenseRepository  ->  storage
   can't be changed by accident, and it checks its own values when it's made.
 - **`ExpenseRepository`** is an abstract class that says what storage must
   do: add, get, list, update and delete. `InMemoryRepository` keeps
-  everything in a dictionary for now. A SQLite version comes later as
-  another class, and nothing above it will need to change.
+  everything in a dictionary, and `SqliteRepository` keeps it in a database
+  file. Nothing above them can tell which one it has.
 - **`ExpenseService`** holds the rules, like "no expenses dated in the
   future" and "you can't change an expense's id". It knows nothing about
   the web, so it's easy to test, like a kitchen that cooks the same food
@@ -117,6 +124,30 @@ lunch = service.create("Lunch", "8.50", "food")
 service.update(lunch.id, amount="9.25")     # only the amount changes
 service.total()                             # Decimal('9.25')
 ```
+
+## Saving to SQLite
+
+SQLite is a whole database in a single file, and it comes with Python, so
+there's nothing extra to install.
+
+- **Money is stored as whole pennies.** £8.50 is saved as `850`. Whole
+  numbers are always exact in a database, decimals aren't always. Banks do
+  the same.
+- **Ids are never reused.** If expense 5 is deleted, the next one is 6, not
+  5, even after a restart. Otherwise an old link to `/expenses/5` could
+  quietly show someone a different expense.
+- **One connection with a lock.** The web server can answer several
+  requests at the same moment. A lock lets one request use the database at
+  a time, like one pen being passed round a table.
+- **Settings come from the environment.** `settings.py` reads `EXPENSE_DB`,
+  so the same code can use a test database on one computer and the real one
+  on another, without being changed.
+
+**Same tests, both repositories.** Every repository, service and API test
+runs twice, once with the in memory repository and once with SQLite. If
+both pass the same tests, they really can be swapped. This is the
+Liskov Substitution Principle: anything that says it's a repository has to
+behave like one.
 
 ## Money
 
@@ -142,7 +173,7 @@ amount is rounded to 2 decimal places when it's made.
 ## Tests
 
 ```bash
-pytest          # 91 tests
+pytest          # 161 tests
 pytest --cov    # with a coverage report, fails below 95%
 ```
 

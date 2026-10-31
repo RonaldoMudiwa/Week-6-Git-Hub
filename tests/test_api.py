@@ -16,8 +16,8 @@ LUNCH = {"title": "Lunch", "amount": "8.50", "category": "food", "spent_on": "20
 
 
 @pytest.fixture
-def client(clock) -> TestClient:
-    return TestClient(create_app(ExpenseService(InMemoryRepository(), clock)))
+def client(repository, clock) -> TestClient:
+    return TestClient(create_app(ExpenseService(repository, clock)))
 
 
 def add(client: TestClient, **overrides) -> dict:
@@ -211,7 +211,13 @@ def test_each_app_has_its_own_data(clock):
     assert second.get("/expenses").json() == []
 
 
-def test_default_app_works():
-    from expense_api.main import app
+def test_main_app_uses_the_settings(monkeypatch, tmp_path):
+    import importlib
 
-    assert TestClient(app).get("/health").status_code == 200
+    # Set first, so importing main never makes a real database file.
+    monkeypatch.setenv("EXPENSE_DB", str(tmp_path / "main.db"))
+    import expense_api.main
+
+    main = importlib.reload(expense_api.main)
+    assert TestClient(main.app).post("/expenses", json=LUNCH).status_code == 201
+    assert (tmp_path / "main.db").exists()

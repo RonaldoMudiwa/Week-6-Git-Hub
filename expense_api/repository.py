@@ -2,8 +2,9 @@
 
 ExpenseRepository is the plug: it says what storage must be able to do,
 not how. InMemoryRepository keeps everything in a dictionary, which is
-perfect for tests. A SQLite version can be added later as another class,
-and nothing that uses the repository has to change.
+perfect for tests. SqliteRepository (in sqlite_repository.py) keeps them
+in a database file. Nothing that uses a repository can tell which one it
+has, so they can be swapped freely.
 """
 
 from __future__ import annotations
