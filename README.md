@@ -10,9 +10,9 @@ terminal. This week the same idea becomes a proper web API.
 
 ## Status
 
-Day 3 of 7. The expense model, exact money handling, the service layer, a
-FastAPI app with create, read, update and delete endpoints, and expenses
-saved in a SQLite database so they're still there after a restart.
+Day 4 of 7. The expense model, exact money handling, the service layer, a
+FastAPI app with create, read, update and delete endpoints, expenses saved
+in SQLite, and searching, sorting and pages of results.
 
 ## Getting started
 
@@ -43,7 +43,7 @@ Needs Python 3.10 or newer.
 | Method | URL | Does | Answers |
 | --- | --- | --- | --- |
 | `POST` | `/expenses` | Add an expense | `201` and the new expense |
-| `GET` | `/expenses` | List every expense, newest first | `200` |
+| `GET` | `/expenses` | Search and list, one page at a time | `200` |
 | `GET` | `/expenses/{id}` | Get one | `200`, or `404` |
 | `PUT` | `/expenses/{id}` | Replace all of it | `200`, or `404` |
 | `PATCH` | `/expenses/{id}` | Change some fields | `200`, or `404` |
@@ -85,12 +85,62 @@ curl -X POST http://127.0.0.1:8000/expenses \
 - **Amounts come back as text**, like `"8.50"`. JSON numbers are floats in
   many languages, and that would bring back the rounding problem.
 
+## Searching, sorting and pages
+
+`GET /expenses` works like the filters on a shopping website. Every
+option is optional, and with none you get the newest 20.
+
+| Option | Example | Meaning |
+| --- | --- | --- |
+| `category` | `food` | Only one category |
+| `date_from`, `date_to` | `2026-10-01` | Spent between these days (both included) |
+| `min_amount`, `max_amount` | `5`, `20.50` | Between these amounts (both included) |
+| `search` | `brighton` | Text in the title or note, any case |
+| `sort` | `date`, `amount`, `title`, `created` | What to sort by |
+| `order` | `desc` or `asc` | Biggest/newest first, or smallest/oldest first |
+| `limit`, `offset` | `20`, `40` | Page size (1 to 100) and where to start |
+
+```
+GET /expenses?category=food&date_from=2026-10-01&sort=amount&limit=2
+```
+
+```json
+{
+  "items": [ {"id": 4, "title": "big shop", "amount": "64.10", ...},
+             {"id": 3, "title": "Lunch", "amount": "8.50", ...} ],
+  "total": 3,
+  "limit": 2,
+  "offset": 0,
+  "next_offset": 2
+}
+```
+
+- **Pages.** `total` says how many matched altogether. To get the next page,
+  send `next_offset` as the `offset`. It's `null` on the last page. Sending
+  5,000 expenses at once would be slow, like printing a whole phone book
+  when someone asked for one page.
+- **Ties always come out the same way.** Two expenses on the same day are
+  also sorted by id, so the same request always gives the same order and
+  nothing gets skipped or repeated between pages.
+- **The database does the work.** `ExpenseRepository.find()` works for any
+  repository by filtering in Python. `SqliteRepository` replaces it with
+  SQL, so only one page is ever loaded. The same tests run against both, so
+  they always give the same answer.
+- **Safe from SQL injection.** Values typed by the user always go into the
+  SQL as `?` placeholders, never pasted in. Sort columns are picked from a
+  fixed list. Searching for `'; DROP TABLE expenses; --` just finds nothing,
+  and there's a test for it.
+- **Bad options get a `422`**, like `limit=500`, `sort=colour`, or a
+  `date_from` after `date_to`.
+
 ## How it's built
 
 ```
 routes.py  ->  ExpenseService  ->  ExpenseRepository  ->  storage
 ```
 
+- **`query.py`** holds `ExpenseQuery` (the filters) and `Page` (one page of
+  results). They know nothing about the web or the database.
 - **`routes.py`** has one short function per endpoint. It reads the
   request, asks the service to do the work and returns the answer. No rules
   live here.
@@ -173,7 +223,7 @@ amount is rounded to 2 decimal places when it's made.
 ## Tests
 
 ```bash
-pytest          # 161 tests
+pytest          # 237 tests
 pytest --cov    # with a coverage report, fails below 95%
 ```
 

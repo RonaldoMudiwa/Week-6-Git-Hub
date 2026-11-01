@@ -1,7 +1,7 @@
 """The endpoints: which URL does what.
 
     POST   /expenses        add one         -> 201 Created
-    GET    /expenses        list them all   -> 200
+    GET    /expenses        search and list -> 200, one page at a time
     GET    /expenses/{id}   get one         -> 200, or 404
     PUT    /expenses/{id}   replace one     -> 200, or 404
     PATCH  /expenses/{id}   change some     -> 200, or 404
@@ -14,9 +14,14 @@ service, not here.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from datetime import date
+from decimal import Decimal
 
-from .schemas import ErrorOut, ExpenseChanges, ExpenseIn, ExpenseOut
+from fastapi import APIRouter, Depends, Query, Request, Response, status
+
+from .models import Category
+from .query import DEFAULT_LIMIT, MAX_LIMIT, ExpenseQuery, Order, SortField
+from .schemas import ErrorOut, ExpenseChanges, ExpenseIn, ExpenseOut, ExpensePage
 from .service import ExpenseService
 
 NOT_FOUND = {404: {"model": ErrorOut, "description": "No expense has that id"}}
@@ -42,9 +47,29 @@ def create_expense(body: ExpenseIn, response: Response,
     return ExpenseOut.of(expense)
 
 
-@router.get("", response_model=list[ExpenseOut])
-def list_expenses(service: ExpenseService = Depends(get_service)) -> list[ExpenseOut]:
-    return [ExpenseOut.of(e) for e in service.list()]
+def search_options(
+    category: Category | None = None,
+    date_from: date | None = Query(None, description="On or after this day"),
+    date_to: date | None = Query(None, description="On or before this day"),
+    min_amount: Decimal | None = Query(None, ge=0),
+    max_amount: Decimal | None = Query(None, ge=0),
+    search: str | None = Query(None, max_length=100, description="Text in the title or note"),
+    sort: SortField = SortField.DATE,
+    order: Order = Order.DESC,
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> ExpenseQuery:
+    """Turns the ?category=food&sort=amount... part of the URL into a query.
+    FastAPI checks each value's type before this even runs."""
+    return ExpenseQuery(category, date_from, date_to, min_amount, max_amount, search,
+                        sort, order, limit, offset)
+
+
+@router.get("", response_model=ExpensePage)
+def list_expenses(query: ExpenseQuery = Depends(search_options),
+                  service: ExpenseService = Depends(get_service)) -> ExpensePage:
+    """For example /expenses?category=food&date_from=2026-10-01&sort=amount&limit=10"""
+    return ExpensePage.of(service.search(query))
 
 
 @router.get("/{expense_id}", response_model=ExpenseOut, responses=NOT_FOUND)

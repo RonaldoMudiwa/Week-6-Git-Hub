@@ -19,6 +19,7 @@ from threading import Lock
 
 from .exceptions import ExpenseNotFoundError, StorageError, ValidationError
 from .models import Category, Expense
+from .query import ExpenseQuery, Order, Page, SortField
 from .repository import ExpenseRepository
 
 MEMORY = ":memory:"
@@ -39,6 +40,15 @@ CREATE INDEX IF NOT EXISTS expenses_by_date ON expenses (spent_on DESC, id DESC)
 """
 
 COLUMNS = "id, title, amount_pence, category, spent_on, note, created_at, updated_at"
+
+# Only these exact words can ever end up after ORDER BY. User input picks
+# one of them, it's never pasted into the SQL itself.
+SORT_COLUMNS = {
+    SortField.DATE: "spent_on",
+    SortField.AMOUNT: "amount_pence",
+    SortField.TITLE: "title COLLATE NOCASE",
+    SortField.CREATED: "created_at",
+}
 
 
 def to_pence(amount: Decimal) -> int:
@@ -116,6 +126,46 @@ class SqliteRepository(ExpenseRepository):
         # Faster than loading every row just to count them.
         with self._lock:
             return self._db.execute("SELECT COUNT(*) FROM expenses").fetchone()[0]
+
+    def find(self, query: ExpenseQuery) -> Page:
+        """The same answer as the base class gives, but the database does
+        the filtering, sorting and counting, so only one page is loaded."""
+        where, params = self._where(query)
+        direction = "DESC" if query.order is Order.DESC else "ASC"
+        order_by = f"{SORT_COLUMNS[query.sort]} {direction}, id {direction}"
+        with self._lock:
+            total = self._db.execute(f"SELECT COUNT(*) FROM expenses {where}", params).fetchone()[0]
+            rows = self._db.execute(
+                f"SELECT {COLUMNS} FROM expenses {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
+                (*params, query.limit, query.offset)).fetchall()
+        return Page([self._to_expense(row) for row in rows], total, query.limit, query.offset)
+
+    @staticmethod
+    def _where(query: ExpenseQuery) -> tuple[str, list]:
+        """Build the WHERE part. Values always go in as ? placeholders, so
+        typing SQL into the search box can't do any harm (SQL injection)."""
+        conditions, params = [], []
+        if query.category is not None:
+            conditions.append("category = ?")
+            params.append(query.category.value)
+        if query.date_from is not None:
+            conditions.append("spent_on >= ?")
+            params.append(query.date_from.isoformat())
+        if query.date_to is not None:
+            conditions.append("spent_on <= ?")
+            params.append(query.date_to.isoformat())
+        if query.min_amount is not None:
+            conditions.append("amount_pence >= ?")
+            params.append(to_pence(query.min_amount))
+        if query.max_amount is not None:
+            conditions.append("amount_pence <= ?")
+            params.append(to_pence(query.max_amount))
+        if query.search is not None:
+            # instr() looks for plain text, so % and _ in a search mean nothing special.
+            conditions.append("instr(lower(title || ' ' || note), lower(?)) > 0")
+            params.append(query.search)
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        return where, params
 
     def close(self) -> None:
         self._db.close()

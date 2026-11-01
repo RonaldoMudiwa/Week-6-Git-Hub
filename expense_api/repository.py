@@ -15,6 +15,7 @@ from threading import Lock
 
 from .exceptions import ExpenseNotFoundError, ValidationError
 from .models import Expense
+from .query import ExpenseQuery, Page, run_query
 
 
 class ExpenseRepository(ABC):
@@ -40,6 +41,15 @@ class ExpenseRepository(ABC):
 
     def count(self) -> int:
         return len(self.list())
+
+    def find(self, query: ExpenseQuery) -> Page:
+        """The expenses that match a query, one page at a time.
+
+        This works for any repository by loading everything and filtering
+        in Python. A repository that can do better, like a database, can
+        replace it with something faster.
+        """
+        return run_query(self.list(), query)
 
 
 def newest_first(expenses: list[Expense]) -> list[Expense]:

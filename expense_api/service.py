@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from .exceptions import ValidationError
 from .models import Category, Expense
+from .query import ExpenseQuery, Page
 from .repository import ExpenseRepository
 
 Clock = Callable[[], datetime]
@@ -46,6 +47,11 @@ class ExpenseService:
 
     def list(self) -> list[Expense]:
         return self._repository.list()
+
+    def search(self, query: ExpenseQuery | None = None) -> Page:
+        """One page of expenses matching the filters. No query means the
+        newest 20."""
+        return self._repository.find(query or ExpenseQuery())
 
     def update(self, expense_id: int, **changes: Any) -> Expense:
         """Change some fields of an expense. Fields left out stay the same.

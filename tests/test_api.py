@@ -100,13 +100,14 @@ def test_titles_are_trimmed(client):
 # ----------------------------------------------------------------------
 
 def test_list_starts_empty(client):
-    assert client.get("/expenses").json() == []
+    assert client.get("/expenses").json() == {
+        "items": [], "total": 0, "limit": 20, "offset": 0, "next_offset": None}
 
 
 def test_list_is_newest_first(client):
     add(client, title="Old", spent_on="2026-10-01")
     add(client, title="New", spent_on="2026-10-28")
-    assert [e["title"] for e in client.get("/expenses").json()] == ["New", "Old"]
+    assert [e["title"] for e in client.get("/expenses").json()["items"]] == ["New", "Old"]
 
 
 def test_get_one(client):
@@ -208,7 +209,7 @@ def test_each_app_has_its_own_data(clock):
     first = TestClient(create_app(ExpenseService(InMemoryRepository(), clock)))
     second = TestClient(create_app(ExpenseService(InMemoryRepository(), clock)))
     add(first)
-    assert second.get("/expenses").json() == []
+    assert second.get("/expenses").json()["total"] == 0
 
 
 def test_main_app_uses_the_settings(monkeypatch, tmp_path):

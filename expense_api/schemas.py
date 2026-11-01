@@ -17,6 +17,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 from .models import MAX_AMOUNT, MAX_NOTE, MAX_TITLE, Category, Expense
+from .query import Page
 
 
 def amount_field(default=...):
@@ -67,6 +68,22 @@ class ExpenseOut(BaseModel):
         return cls(id=expense.id, title=expense.title, amount=expense.amount,
                    category=expense.category, spent_on=expense.spent_on, note=expense.note,
                    created_at=expense.created_at, updated_at=expense.updated_at)
+
+
+class ExpensePage(BaseModel):
+    """One page of results from GET /expenses."""
+
+    items: list[ExpenseOut]
+    total: int = Field(description="How many expenses matched, across every page")
+    limit: int
+    offset: int
+    next_offset: int | None = Field(description="Send this as offset to get the next page. "
+                                                "null on the last page")
+
+    @classmethod
+    def of(cls, page: Page) -> ExpensePage:
+        return cls(items=[ExpenseOut.of(e) for e in page.items], total=page.total,
+                   limit=page.limit, offset=page.offset, next_offset=page.next_offset)
 
 
 class ErrorOut(BaseModel):
