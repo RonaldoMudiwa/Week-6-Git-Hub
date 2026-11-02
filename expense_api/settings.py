@@ -14,6 +14,8 @@ import os
 from dataclasses import dataclass
 from typing import Mapping
 
+from .budgets import BudgetRepository, InMemoryBudgetRepository, SqliteBudgetRepository
+from .reports import ReportService
 from .repository import ExpenseRepository, InMemoryRepository
 from .service import ExpenseService
 from .sqlite_repository import SqliteRepository
@@ -43,3 +45,13 @@ def build_repository(settings: Settings) -> ExpenseRepository:
 
 def build_service(settings: Settings) -> ExpenseService:
     return ExpenseService(build_repository(settings))
+
+
+def build_budgets(settings: Settings) -> BudgetRepository:
+    if settings.in_memory:
+        return InMemoryBudgetRepository()
+    return SqliteBudgetRepository(settings.database)
+
+
+def build_reports(settings: Settings, service: ExpenseService) -> ReportService:
+    return ReportService(service.repository, build_budgets(settings), service.today)

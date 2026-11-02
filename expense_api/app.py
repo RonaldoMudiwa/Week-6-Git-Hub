@@ -11,7 +11,11 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from . import __version__
+from .budgets import InMemoryBudgetRepository
 from .exceptions import ExpenseNotFoundError, ValidationError
+from .report_routes import BudgetNotFoundError
+from .report_routes import router as report_router
+from .reports import ReportService
 from .repository import InMemoryRepository
 from .routes import router
 from .service import ExpenseService
@@ -24,12 +28,19 @@ ever lost to rounding.
 """
 
 
-def create_app(service: ExpenseService | None = None) -> FastAPI:
+def create_app(service: ExpenseService | None = None,
+               reports: ReportService | None = None) -> FastAPI:
     app = FastAPI(title="Expense API", version=__version__, description=DESCRIPTION)
-    app.state.service = service or ExpenseService(InMemoryRepository())
+    service = service or ExpenseService(InMemoryRepository())
+    app.state.service = service
+    # Reports read the same expenses as the service, so the numbers always agree.
+    app.state.reports = reports or ReportService(service.repository, InMemoryBudgetRepository(),
+                                                 service.today)
     app.include_router(router)
+    app.include_router(report_router)
 
     # Our own errors become proper HTTP answers instead of a 500 crash.
+    @app.exception_handler(BudgetNotFoundError)
     @app.exception_handler(ExpenseNotFoundError)
     def not_found(request: Request, error: ExpenseNotFoundError) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": str(error)})

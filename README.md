@@ -10,9 +10,10 @@ terminal. This week the same idea becomes a proper web API.
 
 ## Status
 
-Day 4 of 7. The expense model, exact money handling, the service layer, a
+Day 5 of 7. The expense model, exact money handling, the service layer, a
 FastAPI app with create, read, update and delete endpoints, expenses saved
-in SQLite, and searching, sorting and pages of results.
+in SQLite, searching, sorting and pages of results, spending reports and
+monthly budgets.
 
 ## Getting started
 
@@ -48,6 +49,11 @@ Needs Python 3.10 or newer.
 | `PUT` | `/expenses/{id}` | Replace all of it | `200`, or `404` |
 | `PATCH` | `/expenses/{id}` | Change some fields | `200`, or `404` |
 | `DELETE` | `/expenses/{id}` | Remove it | `204`, or `404` |
+| `GET` | `/reports/summary` | Totals by category and by month | `200` |
+| `GET` | `/reports/budgets` | Spending against each budget this month | `200` |
+| `GET` | `/budgets` | Every budget | `200` |
+| `PUT` | `/budgets/{category}` | Set or change a monthly budget | `200` |
+| `DELETE` | `/budgets/{category}` | Remove a budget | `204`, or `404` |
 | `GET` | `/health` | Is the API up? | `200` |
 
 ```bash
@@ -132,6 +138,52 @@ GET /expenses?category=food&date_from=2026-10-01&sort=amount&limit=2
   and there's a test for it.
 - **Bad options get a `422`**, like `limit=500`, `sort=colour`, or a
   `date_from` after `date_to`.
+
+## Reports and budgets
+
+```
+GET /reports/summary?date_from=2026-10-01&date_to=2026-10-31
+```
+
+```json
+{
+  "count": 4,
+  "total": "724.35",
+  "average": "181.09",
+  "biggest": {"title": "Rent", "amount": "650.00", ...},
+  "by_category": {"rent": "650.00", "food": "72.60", "transport": "1.75"},
+  "by_month": {"2026-10": "724.35"}
+}
+```
+
+A budget is like putting money in an envelope marked "food" at the start of
+the month. `PUT /budgets/food` with `{"monthly_limit": "200"}` fills the
+envelope, and `GET /reports/budgets` shows how much of each one is gone:
+
+```json
+{
+  "month": "2026-11",
+  "budgets": [
+    {"category": "food", "monthly_limit": "200.00", "spent": "164.20",
+     "remaining": "35.80", "percent_used": "82.1", "state": "close"}
+  ]
+}
+```
+
+| State | Means |
+| --- | --- |
+| `ok` | Under 80% used |
+| `close` | 80% or more used, time to slow down |
+| `over` | Spent more than planned. `remaining` goes negative to show by how much |
+
+- **`ReportService` only reads.** It adds up expenses but never changes
+  them, so it's its own class, separate from `ExpenseService`. Each class
+  has one job.
+- **Budgets have their own repository.** `BudgetRepository` is abstract,
+  with an in memory version and a SQLite version that uses its own table in
+  the same database file. Setting a budget twice just replaces it.
+- **`PUT` for budgets.** Sending the same budget twice gives the same
+  result, which is exactly what `PUT` is for.
 
 ## How it's built
 
@@ -223,7 +275,7 @@ amount is rounded to 2 decimal places when it's made.
 ## Tests
 
 ```bash
-pytest          # 237 tests
+pytest          # 304 tests
 pytest --cov    # with a coverage report, fails below 95%
 ```
 

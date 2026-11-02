@@ -7,6 +7,8 @@ Expenses are saved in data/expenses.db unless EXPENSE_DB says otherwise.
 """
 
 from .app import create_app
-from .settings import Settings, build_service
+from .settings import Settings, build_reports, build_service
 
-app = create_app(build_service(Settings.from_env()))
+settings = Settings.from_env()
+service = build_service(settings)
+app = create_app(service, build_reports(settings, service))

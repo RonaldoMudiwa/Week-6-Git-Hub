@@ -16,8 +16,10 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .budgets import Budget, BudgetState, BudgetStatus
 from .models import MAX_AMOUNT, MAX_NOTE, MAX_TITLE, Category, Expense
 from .query import Page
+from .reports import Summary
 
 
 def amount_field(default=...):
@@ -90,3 +92,56 @@ class ErrorOut(BaseModel):
     """Every error the API sends looks like this."""
 
     detail: str
+
+
+class SummaryOut(BaseModel):
+    """Totals for a set of expenses."""
+
+    count: int
+    total: Decimal
+    average: Decimal
+    biggest: ExpenseOut | None
+    by_category: dict[str, Decimal] = Field(description="Biggest category first")
+    by_month: dict[str, Decimal] = Field(description="Like {\"2026-10\": \"512.40\"}")
+
+    @classmethod
+    def of(cls, summary: Summary) -> SummaryOut:
+        return cls(count=summary.count, total=summary.total, average=summary.average,
+                   biggest=ExpenseOut.of(summary.biggest) if summary.biggest else None,
+                   by_category={c.value: v for c, v in summary.by_category.items()},
+                   by_month=summary.by_month)
+
+
+class BudgetIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    monthly_limit: Decimal = amount_field()
+
+
+class BudgetOut(BaseModel):
+    category: Category
+    monthly_limit: Decimal
+
+    @classmethod
+    def of(cls, budget: Budget) -> BudgetOut:
+        return cls(category=budget.category, monthly_limit=budget.monthly_limit)
+
+
+class BudgetStatusOut(BaseModel):
+    category: Category
+    monthly_limit: Decimal
+    spent: Decimal
+    remaining: Decimal = Field(description="Negative when over budget")
+    percent_used: Decimal
+    state: BudgetState
+
+    @classmethod
+    def of(cls, status: BudgetStatus) -> BudgetStatusOut:
+        return cls(category=status.category, monthly_limit=status.monthly_limit,
+                   spent=status.spent, remaining=status.remaining,
+                   percent_used=status.percent_used, state=status.state)
+
+
+class BudgetReportOut(BaseModel):
+    month: str
+    budgets: list[BudgetStatusOut]

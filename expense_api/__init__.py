@@ -5,18 +5,38 @@ A web API for recording and reporting on spending, built with FastAPI.
     from expense_api import ExpenseService, InMemoryRepository
 """
 
+from .budgets import (
+    Budget,
+    BudgetRepository,
+    BudgetState,
+    BudgetStatus,
+    InMemoryBudgetRepository,
+    SqliteBudgetRepository,
+)
 from .exceptions import ExpenseError, ExpenseNotFoundError, StorageError, ValidationError
 from .models import MAX_AMOUNT, Category, Expense, to_money
 from .query import ExpenseQuery, Order, Page, SortField
+from .reports import ReportService, Summary, summarise
 from .repository import ExpenseRepository, InMemoryRepository
 from .service import ExpenseService
-from .settings import Settings, build_repository, build_service
+from .settings import Settings, build_budgets, build_reports, build_repository, build_service
 from .sqlite_repository import SqliteRepository
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 __all__ = [
     "ExpenseService",
+    "ReportService",
+    "Summary",
+    "summarise",
+    "Budget",
+    "BudgetStatus",
+    "BudgetState",
+    "BudgetRepository",
+    "InMemoryBudgetRepository",
+    "SqliteBudgetRepository",
+    "build_budgets",
+    "build_reports",
     "ExpenseRepository",
     "InMemoryRepository",
     "SqliteRepository",

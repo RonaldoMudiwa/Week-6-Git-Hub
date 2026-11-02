@@ -201,7 +201,8 @@ def test_delete_missing(client):
 
 def test_docs_list_every_endpoint(client):
     paths = client.get("/openapi.json").json()["paths"]
-    assert set(paths) == {"/health", "/expenses", "/expenses/{expense_id}"}
+    assert set(paths) == {"/health", "/expenses", "/expenses/{expense_id}", "/reports/summary",
+                          "/reports/budgets", "/budgets", "/budgets/{category}"}
     assert set(paths["/expenses/{expense_id}"]) == {"get", "put", "patch", "delete"}
 
 

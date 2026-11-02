@@ -42,6 +42,11 @@ class ExpenseService:
     def today(self) -> date:
         return self._clock().date()
 
+    @property
+    def repository(self) -> ExpenseRepository:
+        """Read only access, so reports can share the same expenses."""
+        return self._repository
+
     def get(self, expense_id: int) -> Expense:
         return self._repository.get(expense_id)
 
