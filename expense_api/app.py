@@ -1,58 +1,59 @@
 """Building the FastAPI app.
 
-create_app() puts the pieces together: the service, the endpoints and the
-error handlers. Tests call it with their own service, so every test gets a
-fresh, empty app with a clock they control.
+create_app() puts the pieces together: the services, the endpoints, the
+API key check and the error handlers. Tests call it with their own
+services, so every test gets a fresh, empty app with a clock they control.
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
+from typing import Iterable
+
+from fastapi import Depends, FastAPI
 
 from . import __version__
 from .budgets import InMemoryBudgetRepository
-from .exceptions import ExpenseNotFoundError, ValidationError
-from .report_routes import BudgetNotFoundError
+from .errors import add_error_handlers
 from .report_routes import router as report_router
 from .reports import ReportService
 from .repository import InMemoryRepository
 from .routes import router
+from .security import HEADER, ApiKeyChecker
 from .service import ExpenseService
 
-DESCRIPTION = """
+DESCRIPTION = f"""
 Record what you spend and look it back up.
 
 Amounts are sent and returned as text, like `"12.50"`, so no pennies are
 ever lost to rounding.
+
+If the server has API keys set, send one in the `{HEADER}` header. Every
+error comes back as `{{"detail": ..., "code": ..., "fields": [...]}}`.
 """
 
 
-def create_app(service: ExpenseService | None = None,
-               reports: ReportService | None = None) -> FastAPI:
+def create_app(service: ExpenseService | None = None, reports: ReportService | None = None,
+               api_keys: Iterable[str] = ()) -> FastAPI:
     app = FastAPI(title="Expense API", version=__version__, description=DESCRIPTION)
     service = service or ExpenseService(InMemoryRepository())
     app.state.service = service
     # Reports read the same expenses as the service, so the numbers always agree.
     app.state.reports = reports or ReportService(service.repository, InMemoryBudgetRepository(),
                                                  service.today)
-    app.include_router(router)
-    app.include_router(report_router)
 
-    # Our own errors become proper HTTP answers instead of a 500 crash.
-    @app.exception_handler(BudgetNotFoundError)
-    @app.exception_handler(ExpenseNotFoundError)
-    def not_found(request: Request, error: ExpenseNotFoundError) -> JSONResponse:
-        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": str(error)})
-
-    @app.exception_handler(ValidationError)
-    def invalid(request: Request, error: ValidationError) -> JSONResponse:
-        return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                            content={"detail": str(error)})
+    checker = ApiKeyChecker(api_keys)
+    app.state.api_keys = checker
+    # Every expense, report and budget route needs a key. /health and the
+    # /docs page don't, so a server can check the app is alive without one.
+    protected = [Depends(checker)]
+    app.include_router(router, dependencies=protected)
+    app.include_router(report_router, dependencies=protected)
+    add_error_handlers(app)
 
     @app.get("/health", tags=["health"])
     def health() -> dict[str, str]:
         """A quick "are you alive?" check, used by servers and monitoring."""
-        return {"status": "ok", "version": __version__}
+        return {"status": "ok", "version": __version__,
+                "api_keys": "required" if checker.enabled else "off"}
 
     return app

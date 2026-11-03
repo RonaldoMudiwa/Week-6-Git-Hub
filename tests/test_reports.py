@@ -233,7 +233,7 @@ def test_api_budgets(client):
     assert client.delete("/budgets/food").status_code == 204
     missing = client.delete("/budgets/food")
     assert missing.status_code == 404
-    assert missing.json() == {"detail": "There's no budget for food."}
+    assert missing.json()["detail"] == "There's no budget for food."
 
 
 @pytest.mark.parametrize("method, url, body", [

@@ -6,6 +6,7 @@ another without being changed. Like a TV remote: same TV, different channel.
 
     EXPENSE_DB=data/expenses.db     where the database file lives (the default)
     EXPENSE_DB=memory               keep everything in memory, lost on restart
+    EXPENSE_API_KEYS=abc123,xyz789  require one of these keys (none set = no keys needed)
 """
 
 from __future__ import annotations
@@ -26,11 +27,13 @@ DEFAULT_DB = "data/expenses.db"
 @dataclass(frozen=True)
 class Settings:
     database: str = DEFAULT_DB
+    api_keys: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
         env = os.environ if env is None else env
-        return cls(database=env.get("EXPENSE_DB", "").strip() or DEFAULT_DB)
+        keys = tuple(k.strip() for k in env.get("EXPENSE_API_KEYS", "").split(",") if k.strip())
+        return cls(database=env.get("EXPENSE_DB", "").strip() or DEFAULT_DB, api_keys=keys)
 
     @property
     def in_memory(self) -> bool:

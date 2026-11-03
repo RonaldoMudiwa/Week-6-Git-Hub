@@ -18,14 +18,16 @@ from .models import MAX_AMOUNT, Category, Expense, to_money
 from .query import ExpenseQuery, Order, Page, SortField
 from .reports import ReportService, Summary, summarise
 from .repository import ExpenseRepository, InMemoryRepository
+from .security import ApiKeyChecker
 from .service import ExpenseService
 from .settings import Settings, build_budgets, build_reports, build_repository, build_service
 from .sqlite_repository import SqliteRepository
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     "ExpenseService",
+    "ApiKeyChecker",
     "ReportService",
     "Summary",
     "summarise",

@@ -10,10 +10,10 @@ terminal. This week the same idea becomes a proper web API.
 
 ## Status
 
-Day 5 of 7. The expense model, exact money handling, the service layer, a
+Day 6 of 7. The expense model, exact money handling, the service layer, a
 FastAPI app with create, read, update and delete endpoints, expenses saved
-in SQLite, searching, sorting and pages of results, spending reports and
-monthly budgets.
+in SQLite, searching, sorting and pages of results, spending reports,
+monthly budgets, API keys and one shape for every error.
 
 ## Getting started
 
@@ -32,6 +32,62 @@ everything in memory, set `EXPENSE_DB` before starting:
 ```bash
 set EXPENSE_DB=memory            # macOS or Linux: export EXPENSE_DB=memory
 ```
+
+## API keys
+
+An API key is a password for programs, like a membership card shown at the
+door. Set one or more keys before starting the server and every request
+must send one:
+
+```bash
+set EXPENSE_API_KEYS=my-long-secret-key,another-key
+python -m expense_api
+```
+
+```bash
+curl http://127.0.0.1:8000/expenses -H "X-API-Key: my-long-secret-key"
+```
+
+- With no keys set, nothing is needed. Handy for trying it on your own
+  computer.
+- `/health` and `/docs` never need a key, so a server can check the app is
+  alive. `/health` says whether keys are `required` or `off`.
+- Keys are compared with `hmac.compare_digest`, which takes the same time
+  however much of a wrong key is right. A normal `==` stops at the first
+  wrong letter, and an attacker could time the answers to guess a key one
+  letter at a time.
+- The check is a FastAPI dependency added to every router in one place, so
+  a new endpoint can't forget it.
+- On the docs page, click **Authorize** and paste a key to try the
+  protected endpoints.
+
+## Errors
+
+Every error has the same three parts, whatever went wrong:
+
+```json
+{
+  "detail": "Please check: amount.",
+  "code": "invalid",
+  "fields": [{"field": "amount", "message": "Input should be greater than 0"}]
+}
+```
+
+| Code | Status | When |
+| --- | --- | --- |
+| `invalid` | 422 | Bad input: a wrong type, a rule broken, a typo in a field name |
+| `not_found` | 404 | No expense or budget with that id, or a URL that doesn't exist |
+| `unauthorized` | 401 | Missing or wrong API key |
+| `http_error` | 405 and others | Like using `PATCH` where it isn't allowed |
+| `server_error` | 500 | A bug on our side |
+
+- A program only has to learn one shape to handle any error, like every
+  shop using the same kind of receipt.
+- Pydantic's own errors, which normally look different, are turned into
+  this shape too.
+- When something crashes, the real error goes in the server's log, and the
+  user only sees a polite message. Error messages can leak secrets or show
+  how the inside of an app works, and there's a test that checks they don't.
 
 While it's running, open http://127.0.0.1:8000/docs. FastAPI builds that
 page from the code, and every endpoint can be tried from there with a
@@ -199,9 +255,8 @@ routes.py  ->  ExpenseService  ->  ExpenseRepository  ->  storage
 - **`schemas.py`** holds the Pydantic models: the shape of the JSON going
   in and out. They're kept apart from `Expense`, so the API's JSON and the
   app's own model can each change without breaking the other.
-- **`app.py`** builds the app with `create_app()`. It turns our own errors
-  into proper `404` and `422` answers, so a missing expense never shows up
-  as a crash. The tests call `create_app()` with their own service, so each
+- **`app.py`** builds the app with `create_app()`. **`errors.py`** turns
+  every error into the same shape, and **`security.py`** checks API keys. The tests call `create_app()` with their own service, so each
   test starts with an empty app and a clock it controls.
 - **Dependency injection.** Each endpoint asks for the service with
   `Depends(get_service)` instead of creating one itself, like a worker
@@ -275,7 +330,7 @@ amount is rounded to 2 decimal places when it's made.
 ## Tests
 
 ```bash
-pytest          # 304 tests
+pytest          # 325 tests
 pytest --cov    # with a coverage report, fails below 95%
 ```
 

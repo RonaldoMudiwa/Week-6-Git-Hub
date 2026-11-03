@@ -195,7 +195,8 @@ def test_api_refuses_bad_parameters(client, params):
 def test_api_rules_from_the_query_class(client):
     response = client.get("/expenses?min_amount=10&max_amount=5")
     assert response.status_code == 422
-    assert response.json() == {"detail": "min_amount can't be more than max_amount."}
+    assert response.json() == {"detail": "min_amount can't be more than max_amount.",
+                               "code": "invalid", "fields": []}
 
 
 def test_created_sort_handles_missing_times(repository):

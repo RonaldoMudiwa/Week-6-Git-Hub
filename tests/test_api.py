@@ -27,7 +27,8 @@ def add(client: TestClient, **overrides) -> dict:
 
 
 def test_health(client):
-    assert client.get("/health").json() == {"status": "ok", "version": __version__}
+    assert client.get("/health").json() == {"status": "ok", "version": __version__,
+                                            "api_keys": "off"}
 
 
 # ----------------------------------------------------------------------
@@ -75,12 +76,14 @@ def test_amount_can_be_a_number_or_text(client):
 def test_create_refuses_bad_input(client, change, field):
     response = client.post("/expenses", json={**LUNCH, **change})
     assert response.status_code == 422
-    assert field in str(response.json()["detail"])
+    body = response.json()
+    assert body["code"] == "invalid"
+    assert field in body["detail"]
 
 
 def test_missing_fields(client):
     response = client.post("/expenses", json={})
-    fields = {error["loc"][-1] for error in response.json()["detail"]}
+    fields = {error["field"] for error in response.json()["fields"]}
     assert response.status_code == 422
     assert fields == {"title", "amount"}
 
@@ -88,7 +91,7 @@ def test_missing_fields(client):
 def test_future_date_is_refused_by_the_service(client):
     response = client.post("/expenses", json={**LUNCH, "spent_on": "2026-11-05"})
     assert response.status_code == 422
-    assert response.json() == {"detail": "An expense can't be dated in the future."}
+    assert response.json()["detail"] == "An expense can't be dated in the future."
 
 
 def test_titles_are_trimmed(client):
@@ -120,7 +123,8 @@ def test_get_one(client):
 def test_get_missing(client):
     response = client.get("/expenses/42")
     assert response.status_code == 404
-    assert response.json() == {"detail": "There's no expense with id 42."}
+    assert response.json() == {"detail": "There's no expense with id 42.", "code": "not_found",
+                               "fields": []}
 
 
 def test_id_must_be_a_number(client):

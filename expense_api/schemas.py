@@ -88,10 +88,18 @@ class ExpensePage(BaseModel):
                    limit=page.limit, offset=page.offset, next_offset=page.next_offset)
 
 
+class FieldError(BaseModel):
+    field: str = Field(examples=["amount"])
+    message: str = Field(examples=["Input should be greater than 0"])
+
+
 class ErrorOut(BaseModel):
     """Every error the API sends looks like this."""
 
-    detail: str
+    detail: str = Field(description="A sentence for people")
+    code: str = Field(description="not_found, invalid, unauthorized, http_error or server_error")
+    fields: list[FieldError] = Field(default_factory=list,
+                                     description="Which parts of the request were wrong")
 
 
 class SummaryOut(BaseModel):

@@ -13,7 +13,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
-from .exceptions import ExpenseError
+from .errors import NotFoundError
 from .models import Category
 from .reports import ReportService
 from .schemas import BudgetIn, BudgetOut, BudgetReportOut, BudgetStatusOut, ErrorOut, SummaryOut
@@ -21,7 +21,7 @@ from .schemas import BudgetIn, BudgetOut, BudgetReportOut, BudgetStatusOut, Erro
 router = APIRouter(tags=["reports and budgets"])
 
 
-class BudgetNotFoundError(ExpenseError):
+class BudgetNotFoundError(NotFoundError):
     def __init__(self, category: Category) -> None:
         super().__init__(f"There's no budget for {category.value}.")
 
