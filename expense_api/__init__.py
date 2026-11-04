@@ -23,7 +23,7 @@ from .service import ExpenseService
 from .settings import Settings, build_budgets, build_reports, build_repository, build_service
 from .sqlite_repository import SqliteRepository
 
-__version__ = "0.6.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "ExpenseService",

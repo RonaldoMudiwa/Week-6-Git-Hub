@@ -10,10 +10,11 @@ terminal. This week the same idea becomes a proper web API.
 
 ## Status
 
-Day 6 of 7. The expense model, exact money handling, the service layer, a
-FastAPI app with create, read, update and delete endpoints, expenses saved
-in SQLite, searching, sorting and pages of results, spending reports,
-monthly budgets, API keys and one shape for every error.
+Finished. A REST API for expenses with create, read, update and delete,
+exact money handling, SQLite storage, searching, sorting and pages,
+spending reports, monthly budgets, API keys and one shape for every error.
+328 tests with 100% coverage, run against both in memory and SQLite
+storage.
 
 ## Getting started
 
@@ -244,7 +245,11 @@ envelope, and `GET /reports/budgets` shows how much of each one is gone:
 ## How it's built
 
 ```
-routes.py  ->  ExpenseService  ->  ExpenseRepository  ->  storage
+routes.py         ->  ExpenseService  ->  ExpenseRepository  ->  InMemory or SQLite
+report_routes.py  ->  ReportService   ->  ExpenseRepository (read only)
+                                      ->  BudgetRepository   ->  InMemory or SQLite
+every route       ->  ApiKeyChecker
+every error       ->  errors.py  ->  {"detail", "code", "fields"}
 ```
 
 - **`query.py`** holds `ExpenseQuery` (the filters) and `Page` (one page of
@@ -255,9 +260,10 @@ routes.py  ->  ExpenseService  ->  ExpenseRepository  ->  storage
 - **`schemas.py`** holds the Pydantic models: the shape of the JSON going
   in and out. They're kept apart from `Expense`, so the API's JSON and the
   app's own model can each change without breaking the other.
-- **`app.py`** builds the app with `create_app()`. **`errors.py`** turns
-  every error into the same shape, and **`security.py`** checks API keys. The tests call `create_app()` with their own service, so each
-  test starts with an empty app and a clock it controls.
+- **`app.py`** builds the app with `create_app()`. The tests call it with
+  their own services, so each test starts with an empty app and a clock it
+  controls. **`errors.py`** turns every error into the same shape, and
+  **`security.py`** checks API keys.
 - **Dependency injection.** Each endpoint asks for the service with
   `Depends(get_service)` instead of creating one itself, like a worker
   being handed the tools for the job instead of bringing their own.
@@ -330,12 +336,54 @@ amount is rounded to 2 decimal places when it's made.
 ## Tests
 
 ```bash
-pytest          # 325 tests
+pytest          # 328 tests
 pytest --cov    # with a coverage report, fails below 95%
 ```
 
 The API tests use FastAPI's `TestClient`. It sends real HTTP requests to
 the app, but in memory, so no server has to be started.
+
+`test_end_to_end.py` starts the app exactly the way `python -m expense_api`
+does, with a real database file and an API key, then uses it like a person
+would: adds a month of spending, fixes a typo, sets a budget, restarts the
+app and checks nothing was lost.
+
+## Project layout
+
+```
+expense_api/
+    models.py             Expense, Category and exact money
+    exceptions.py         the app's own errors
+    repository.py         ExpenseRepository and InMemoryRepository
+    sqlite_repository.py  SqliteRepository
+    query.py              ExpenseQuery, Page and sorting
+    service.py            ExpenseService, the rules
+    reports.py            ReportService and summaries
+    budgets.py            Budget, BudgetStatus and their repositories
+    schemas.py            the JSON going in and out (Pydantic)
+    routes.py             the /expenses endpoints
+    report_routes.py      the /reports and /budgets endpoints
+    security.py           API keys
+    errors.py             one shape for every error
+    settings.py           settings from environment variables
+    app.py                create_app() puts it all together
+    main.py               the app the web server runs
+tests/                    one test file per part, plus end to end tests
+```
+
+## What I learned this week
+
+- Building a REST API with FastAPI: routes, status codes, `PUT` vs `PATCH`
+- Pydantic models to check input before any of my code runs
+- Dependency injection with `Depends`, for the services and the API key check
+- Keeping money exact with `Decimal`, and storing it as whole pennies
+- Swapping storage behind an abstract class, and proving it with the same
+  tests run against both
+- Writing SQL safely: placeholders and a fixed list of sort columns
+- Pages of results, and why ties need a second sort key
+- API keys, and comparing secrets without leaking timing
+- Error responses that are consistent and never leak what's inside
+- Settings from environment variables
 
 ## Week plan
 
@@ -347,4 +395,4 @@ the app, but in memory, so no server has to be started.
 | 4 | Filtering, sorting and pages of results |
 | 5 | Reports and monthly budgets |
 | 6 | API keys and clearer error responses |
-| 7 | Final tests and README |
+| 7 | End to end tests and README |
